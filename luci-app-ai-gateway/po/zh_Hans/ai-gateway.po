@@ -1,0 +1,344 @@
+msgid "AI Gateway"
+msgstr "AI 网关"
+
+msgid "Status"
+msgstr "状态"
+
+msgid "Providers"
+msgstr "提供商"
+
+msgid "Identity"
+msgstr "身份"
+
+msgid "Certificates"
+msgstr "证书"
+
+msgid "Service Status"
+msgstr "服务状态"
+
+msgid "Enabled"
+msgstr "已启用"
+
+msgid "Yes"
+msgstr "是"
+
+msgid "No"
+msgstr "否"
+
+msgid "Running"
+msgstr "运行中"
+
+msgid "Stopped"
+msgstr "已停止"
+
+msgid "HTTPS Proxy Port"
+msgstr "HTTPS 代理端口"
+
+msgid "CA Download Port"
+msgstr "CA 证书下载端口"
+
+msgid "Provider Status"
+msgstr "提供商状态"
+
+msgid "Provider"
+msgstr "提供商"
+
+msgid "Upstream"
+msgstr "上游"
+
+msgid "Requests"
+msgstr "请求数"
+
+msgid "Statistics"
+msgstr "统计"
+
+msgid "Total Requests"
+msgstr "总请求数"
+
+msgid "Active Requests"
+msgstr "活跃请求数"
+
+msgid "CA Fingerprint"
+msgstr "CA 证书指纹"
+
+msgid "CA Certificate"
+msgstr "CA 证书"
+
+msgid "Download and install the CA certificate on client devices to enable transparent proxying."
+msgstr "在客户端设备上下载并安装 CA 证书以启用透明代理。"
+
+msgid "Download PEM"
+msgstr "下载 PEM 格式"
+
+msgid "Download DER"
+msgstr "下载 DER 格式"
+
+msgid "Installation Guide"
+msgstr "安装指南"
+
+msgid "AI Gateway - Providers"
+msgstr "AI 网关 - 提供商"
+
+msgid "Configure AI API providers. Enable the providers you want to intercept and provide API credentials."
+msgstr "配置 AI API 提供商。启用要拦截的提供商并提供 API 凭证。"
+
+msgid "Global Settings"
+msgstr "全局设置"
+
+msgid "Enable AI Gateway"
+msgstr "启用 AI 网关"
+
+msgid "HTTPS Listen Port"
+msgstr "HTTPS 监听端口"
+
+msgid "Port for intercepting HTTPS API traffic. Default: 443"
+msgstr "用于拦截 HTTPS API 流量的端口。默认: 443"
+
+msgid "HTTP port for CA certificate download page. Default: 8080"
+msgstr "CA 证书下载页面的 HTTP 端口。默认: 8080"
+
+msgid "Log Level"
+msgstr "日志级别"
+
+msgid "Debug"
+msgstr "调试"
+
+msgid "Info"
+msgstr "信息"
+
+msgid "Warning"
+msgstr "警告"
+
+msgid "Error"
+msgstr "错误"
+
+msgid "Audit Logging"
+msgstr "审计日志"
+
+msgid "Log each request with client IP, method, path, and status code."
+msgstr "记录每个请求的客户端 IP、方法、路径和状态码。"
+
+msgid "Anthropic (Claude)"
+msgstr "Anthropic (Claude)"
+
+msgid "Enable"
+msgstr "启用"
+
+msgid "Upstream URL"
+msgstr "上游地址"
+
+msgid "Intercepted Domains"
+msgstr "拦截域名"
+
+msgid "Domains to intercept via DNS hijacking."
+msgstr "通过 DNS 劫持拦截的域名。"
+
+msgid "API Key"
+msgstr "API 密钥"
+
+msgid "Anthropic API key (sk-ant-...). Used when not using OAuth."
+msgstr "Anthropic API 密钥 (sk-ant-...)。不使用 OAuth 时使用。"
+
+msgid "OAuth Access Token"
+msgstr "OAuth 访问令牌"
+
+msgid "OAuth access token from Claude Code login. Auto-injected into requests."
+msgstr "Claude Code 登录获取的 OAuth 访问令牌。自动注入到请求中。"
+
+msgid "OAuth Refresh Token"
+msgstr "OAuth 刷新令牌"
+
+msgid "OAuth refresh token for automatic token refresh."
+msgstr "用于自动刷新令牌的 OAuth 刷新令牌。"
+
+msgid "OpenAI (ChatGPT)"
+msgstr "OpenAI (ChatGPT)"
+
+msgid "OpenAI API key (sk-...). Injected as Bearer token in Authorization header."
+msgstr "OpenAI API 密钥 (sk-...)。作为 Bearer 令牌注入 Authorization 头。"
+
+msgid "Google Gemini"
+msgstr "Google Gemini"
+
+msgid "Google Gemini API key. Injected as query parameter."
+msgstr "Google Gemini API 密钥。作为查询参数注入。"
+
+msgid "AI Gateway - Identity"
+msgstr "AI 网关 - 身份"
+
+msgid "Configure the canonical device identity that all client requests will be normalized to. All connected devices will appear as this single identity to AI providers."
+msgstr "配置规范设备身份，所有客户端请求将被规范化为此身份。所有连接的设备对 AI 提供商将显示为同一身份。"
+
+msgid "Device Identity"
+msgstr "设备身份"
+
+msgid "Device ID"
+msgstr "设备 ID"
+
+msgid "64-character hex device identifier. Set to \"auto\" to generate on first start."
+msgstr "64 字符十六进制设备标识符。设置为 \"auto\" 在首次启动时自动生成。"
+
+msgid "Email"
+msgstr "邮箱"
+
+msgid "Canonical email address reported to AI providers."
+msgstr "报告给 AI 提供商的规范邮箱地址。"
+
+msgid "Environment Fingerprint"
+msgstr "环境指纹"
+
+msgid "These values replace the environment telemetry reported by Claude Code and other AI tools."
+msgstr "这些值将替换 Claude Code 和其他 AI 工具报告的环境遥测数据。"
+
+msgid "Platform"
+msgstr "平台"
+
+msgid "Architecture"
+msgstr "架构"
+
+msgid "Node.js Version"
+msgstr "Node.js 版本"
+
+msgid "Terminal"
+msgstr "终端"
+
+msgid "Package Managers"
+msgstr "包管理器"
+
+msgid "Comma-separated list."
+msgstr "逗号分隔列表。"
+
+msgid "Runtimes"
+msgstr "运行时"
+
+msgid "Claude Code Version"
+msgstr "Claude Code 版本"
+
+msgid "Version string to report. Should match a real CC version."
+msgstr "报告的版本字符串。应匹配真实的 CC 版本。"
+
+msgid "Build Time"
+msgstr "构建时间"
+
+msgid "Deployment Environment"
+msgstr "部署环境"
+
+msgid "VCS"
+msgstr "版本控制"
+
+msgid "System Prompt Environment"
+msgstr "系统提示词环境"
+
+msgid "These values replace the <env> block injected into AI system prompts. Must be consistent with environment settings above."
+msgstr "这些值将替换注入到 AI 系统提示词中的 <env> 块。必须与上述环境设置保持一致。"
+
+msgid "Prompt Platform"
+msgstr "提示词平台"
+
+msgid "Platform shown in system prompt. Should match Platform above."
+msgstr "系统提示词中显示的平台。应与上方平台设置匹配。"
+
+msgid "Shell"
+msgstr "Shell"
+
+msgid "OS Version"
+msgstr "操作系统版本"
+
+msgid "OS version string (uname -sr output)."
+msgstr "操作系统版本字符串 (uname -sr 输出)。"
+
+msgid "Working Directory"
+msgstr "工作目录"
+
+msgid "Canonical working directory path prefix."
+msgstr "规范工作目录路径前缀。"
+
+msgid "Process Metrics"
+msgstr "进程指标"
+
+msgid "Realistic process metrics to report. Should match a real machine profile."
+msgstr "报告的逼真进程指标。应匹配真实机器配置。"
+
+msgid "Physical RAM (bytes)"
+msgstr "物理内存 (字节)"
+
+msgid "RSS Min (bytes)"
+msgstr "RSS 最小值 (字节)"
+
+msgid "RSS Max (bytes)"
+msgstr "RSS 最大值 (字节)"
+
+msgid "Heap Total Min"
+msgstr "堆总量最小值"
+
+msgid "Heap Total Max"
+msgstr "堆总量最大值"
+
+msgid "Heap Used Min"
+msgstr "堆已用最小值"
+
+msgid "Heap Used Max"
+msgstr "堆已用最大值"
+
+msgid "AI Gateway - Certificates"
+msgstr "AI 网关 - 证书"
+
+msgid "SHA-256 Fingerprint"
+msgstr "SHA-256 指纹"
+
+msgid "CA Directory"
+msgstr "CA 目录"
+
+msgid "Download Certificate"
+msgstr "下载证书"
+
+msgid "PEM Format (.crt)"
+msgstr "PEM 格式 (.crt)"
+
+msgid "DER Format (.der)"
+msgstr "DER 格式 (.der)"
+
+msgid "Download the PEM certificate (.crt) above"
+msgstr "下载上方的 PEM 证书 (.crt)"
+
+msgid "Double-click the file to open in Keychain Access"
+msgstr "双击文件在钥匙串访问中打开"
+
+msgid "Find \"AI Gateway CA\" in the keychain"
+msgstr "在钥匙串中找到 \"AI Gateway CA\""
+
+msgid "Double-click → Trust → \"Always Trust\""
+msgstr "双击 → 信任 → \"始终信任\""
+
+msgid "Close and enter your password to confirm"
+msgstr "关闭并输入密码确认"
+
+msgid "Or via command line:"
+msgstr "或通过命令行："
+
+msgid "Download the DER certificate (.der) above"
+msgstr "下载上方的 DER 证书 (.der)"
+
+msgid "Select \"Local Machine\" → \"Trusted Root Certification Authorities\""
+msgstr "选择 \"本地计算机\" → \"受信任的根证书颁发机构\""
+
+msgid "Complete the wizard"
+msgstr "完成向导"
+
+msgid "Or via PowerShell (admin):"
+msgstr "或通过 PowerShell (管理员)："
+
+msgid "Regenerate CA Certificate"
+msgstr "重新生成 CA 证书"
+
+msgid "Warning: Regenerating the CA certificate will require all clients to re-install the new certificate."
+msgstr "警告: 重新生成 CA 证书将需要所有客户端重新安装新证书。"
+
+msgid "Are you sure? All clients will need to reinstall the CA certificate."
+msgstr "确定吗？所有客户端都需要重新安装 CA 证书。"
+
+msgid "Regenerate CA"
+msgstr "重新生成 CA"
+
+msgid "(service not running)"
+msgstr "(服务未运行)"

@@ -1,0 +1,45 @@
+{
+	"admin/services/ai-gateway": {
+		"title": "AI Gateway",
+		"order": 60,
+		"action": {
+			"type": "firstchild"
+		},
+		"depends": {
+			"acl": ["luci-app-ai-gateway"],
+			"uci": { "ai-gateway": true }
+		}
+	},
+	"admin/services/ai-gateway/status": {
+		"title": "Status",
+		"order": 10,
+		"action": {
+			"type": "view",
+			"path": "ai-gateway/status"
+		}
+	},
+	"admin/services/ai-gateway/providers": {
+		"title": "Providers",
+		"order": 20,
+		"action": {
+			"type": "view",
+			"path": "ai-gateway/providers"
+		}
+	},
+	"admin/services/ai-gateway/identity": {
+		"title": "Identity",
+		"order": 30,
+		"action": {
+			"type": "view",
+			"path": "ai-gateway/identity"
+		}
+	},
+	"admin/services/ai-gateway/certs": {
+		"title": "Certificates",
+		"order": 40,
+		"action": {
+			"type": "view",
+			"path": "ai-gateway/certs"
+		}
+	}
+}

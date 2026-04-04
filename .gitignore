@@ -1,0 +1,38 @@
+# Binaries
+ai-gateway/src/ai-gateway
+*.exe
+*.dll
+*.so
+*.dylib
+
+# Test binary
+*.test
+
+# Output
+/bin/
+/build/
+*.ipk
+
+# Go module cache
+ai-gateway/src/vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# TLS certificates (generated at runtime)
+*.key
+*.crt
+*.der
+*.pem
+!ai-gateway/files/*.conf
+
+# Temp
+/tmp/
