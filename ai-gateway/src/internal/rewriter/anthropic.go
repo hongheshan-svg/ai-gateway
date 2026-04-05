@@ -82,6 +82,11 @@ func (r *AnthropicRewriter) RewriteHeaders(header http.Header, cfg *config.Confi
 			continue
 		}
 
+		// Strip forwarding headers that leak client IP
+		if lower == "x-forwarded-for" || lower == "x-real-ip" || lower == "x-forwarded-host" {
+			continue
+		}
+
 		for _, v := range values {
 			out.Add(key, v)
 		}

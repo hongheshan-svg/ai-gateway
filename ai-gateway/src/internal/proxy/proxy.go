@@ -200,13 +200,17 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	targetURL.Scheme = upstreamURL.Scheme
 	targetURL.Host = upstreamURL.Host
 
-	// For Gemini, inject API key as query parameter
+	// For Gemini, always replace API key in query parameter
+	// (ensures client's original key is stripped and gateway key is used)
 	if providerName == "gemini" && provider.APIKey != "" {
 		q := targetURL.Query()
-		if q.Get("key") == "" {
-			q.Set("key", provider.APIKey)
-			targetURL.RawQuery = q.Encode()
-		}
+		q.Set("key", provider.APIKey)
+		targetURL.RawQuery = q.Encode()
+	} else if providerName == "gemini" {
+		// No gateway key configured: strip any client-provided key
+		q := targetURL.Query()
+		q.Del("key")
+		targetURL.RawQuery = q.Encode()
 	}
 
 	// Build upstream request

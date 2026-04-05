@@ -117,8 +117,16 @@ func (r *GeminiRewriter) RewriteHeaders(header http.Header, cfg *config.Config, 
 		}
 
 		// Strip Google-specific telemetry headers
-		if strings.HasPrefix(lower, "x-goog-api-client") {
-			out.Set(key, "genai-go/0.1.0")
+		if strings.HasPrefix(lower, "x-goog-") {
+			if lower == "x-goog-api-client" {
+				out.Set(key, "genai-go/0.1.0")
+			}
+			// Drop all other x-goog-* headers (x-goog-api-key handled via query param)
+			continue
+		}
+
+		// Strip forwarding headers that leak client IP
+		if lower == "x-forwarded-for" || lower == "x-real-ip" || lower == "x-forwarded-host" {
 			continue
 		}
 

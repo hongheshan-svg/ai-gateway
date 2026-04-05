@@ -119,9 +119,11 @@ func TestGeminiRewriteHeaders(t *testing.T) {
 	rw := &GeminiRewriter{}
 
 	headers := http.Header{
-		"User-Agent":       {"python-genai/0.5.0"},
-		"X-Goog-Api-Client": {"gl-python/3.11 genai/0.5.0"},
-		"Content-Type":     {"application/json"},
+		"User-Agent":         {"python-genai/0.5.0"},
+		"X-Goog-Api-Client":  {"gl-python/3.11 genai/0.5.0"},
+		"X-Goog-Api-Key":     {"leaked-key"},
+		"Content-Type":       {"application/json"},
+		"X-Forwarded-For":    {"192.168.1.100"},
 	}
 
 	result := rw.RewriteHeaders(headers, cfg, provider)
@@ -134,6 +136,12 @@ func TestGeminiRewriteHeaders(t *testing.T) {
 	}
 	if result.Get("Content-Type") != "application/json" {
 		t.Error("Content-Type should pass through")
+	}
+	if result.Get("X-Goog-Api-Key") != "" {
+		t.Error("x-goog-api-key header should be stripped")
+	}
+	if result.Get("X-Forwarded-For") != "" {
+		t.Error("x-forwarded-for header should be stripped")
 	}
 }
 

@@ -103,6 +103,17 @@ func (r *OpenAIRewriter) RewriteHeaders(header http.Header, cfg *config.Config, 
 			continue
 		}
 
+		// Strip organization/project headers that leak org identity
+		if lower == "openai-organization" || lower == "openai-project" {
+			logger.Debug("OpenAI: Stripped %s header", key)
+			continue
+		}
+
+		// Strip forwarding headers that leak client IP
+		if lower == "x-forwarded-for" || lower == "x-real-ip" || lower == "x-forwarded-host" {
+			continue
+		}
+
 		for _, v := range values {
 			out.Add(key, v)
 		}

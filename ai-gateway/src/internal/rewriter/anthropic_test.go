@@ -200,6 +200,8 @@ func TestAnthropicRewriteHeaders(t *testing.T) {
 		"X-Anthropic-Billing-Header": {"billing-data"},
 		"Content-Type":               {"application/json"},
 		"Connection":                 {"keep-alive"},
+		"X-Forwarded-For":            {"192.168.1.100"},
+		"X-Real-Ip":                  {"10.0.0.1"},
 	}
 
 	result := rw.RewriteHeaders(headers, cfg, provider)
@@ -231,6 +233,14 @@ func TestAnthropicRewriteHeaders(t *testing.T) {
 	// API key should be injected from OAuth token
 	if result.Get("X-Api-Key") != "test-oauth-token" {
 		t.Errorf("OAuth token not injected: got %s", result.Get("X-Api-Key"))
+	}
+
+	// Forwarding headers should be stripped
+	if result.Get("X-Forwarded-For") != "" {
+		t.Error("x-forwarded-for header should be stripped")
+	}
+	if result.Get("X-Real-Ip") != "" {
+		t.Error("x-real-ip header should be stripped")
 	}
 }
 
