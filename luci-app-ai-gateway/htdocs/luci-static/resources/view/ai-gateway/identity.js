@@ -3,6 +3,52 @@
 'require form';
 'require uci';
 
+var presets = {
+	'macos_arm64': {
+		label: 'macOS ARM64 (Apple Silicon)',
+		platform: 'darwin', arch: 'arm64', terminal: 'iTerm2.app',
+		node_version: 'v24.3.0', package_managers: 'npm,pnpm', runtimes: 'node',
+		prompt_platform: 'darwin', prompt_shell: 'zsh',
+		prompt_os_version: 'Darwin 24.4.0',
+		prompt_working_dir: '/Users/jack/projects',
+		deployment_environment: 'unknown-darwin',
+		constrained_memory: '34359738368'
+	},
+	'ubuntu_x64': {
+		label: 'Ubuntu x64',
+		platform: 'linux', arch: 'x64', terminal: 'gnome-terminal',
+		node_version: 'v22.12.0', package_managers: 'npm,apt', runtimes: 'node',
+		prompt_platform: 'linux', prompt_shell: 'bash',
+		prompt_os_version: 'Linux 6.8.0',
+		prompt_working_dir: '/home/user/projects',
+		deployment_environment: 'unknown-linux',
+		constrained_memory: '17179869184'
+	},
+	'windows_x64': {
+		label: 'Windows x64',
+		platform: 'win32', arch: 'x64', terminal: 'Windows Terminal',
+		node_version: 'v22.12.0', package_managers: 'npm', runtimes: 'node',
+		prompt_platform: 'win32', prompt_shell: 'powershell',
+		prompt_os_version: 'Windows NT 10.0',
+		prompt_working_dir: 'C:\\Users\\user\\projects',
+		deployment_environment: 'unknown-win32',
+		constrained_memory: '34359738368'
+	}
+};
+
+function applyPreset(presetKey) {
+	var p = presets[presetKey];
+	if (!p) return;
+	var fields = ['platform', 'arch', 'terminal', 'node_version', 'package_managers',
+		'runtimes', 'prompt_platform', 'prompt_shell', 'prompt_os_version',
+		'prompt_working_dir', 'deployment_environment', 'constrained_memory'];
+	for (var i = 0; i < fields.length; i++) {
+		if (p[fields[i]] !== undefined) {
+			uci.set('ai-gateway', 'canonical', fields[i], p[fields[i]]);
+		}
+	}
+}
+
 return view.extend({
 	load: function() {
 		return uci.load('ai-gateway');
@@ -14,6 +60,35 @@ return view.extend({
 		m = new form.Map('ai-gateway', _('AI Gateway - Identity'),
 			_('Configure the canonical device identity that all client requests will be normalized to. ' +
 			  'All connected devices will appear as this single identity to AI providers.'));
+
+		// Quick preset section
+		s = m.section(form.NamedSection, 'canonical', 'identity', _('Quick Presets'),
+			_('Apply a preset environment profile. This fills in the fields below.'));
+		s.anonymous = true;
+
+		o = s.option(form.Button, '_preset_macos', _('macOS ARM64'));
+		o.inputstyle = 'action';
+		o.inputtitle = _('Apply');
+		o.onclick = function() {
+			applyPreset('macos_arm64');
+			window.location.reload();
+		};
+
+		o = s.option(form.Button, '_preset_ubuntu', _('Ubuntu x64'));
+		o.inputstyle = 'action';
+		o.inputtitle = _('Apply');
+		o.onclick = function() {
+			applyPreset('ubuntu_x64');
+			window.location.reload();
+		};
+
+		o = s.option(form.Button, '_preset_windows', _('Windows x64'));
+		o.inputstyle = 'action';
+		o.inputtitle = _('Apply');
+		o.onclick = function() {
+			applyPreset('windows_x64');
+			window.location.reload();
+		};
 
 		s = m.section(form.NamedSection, 'canonical', 'identity', _('Device Identity'));
 		s.anonymous = true;

@@ -38,7 +38,8 @@ func (r *GeminiRewriter) RewriteBody(body []byte, path string, cfg *config.Confi
 
 	// Rewrite system instruction env blocks
 	// Gemini API paths use colon: /models/{model}:generateContent
-	if strings.Contains(path, "generateContent") || strings.Contains(path, "streamGenerateContent") {
+	if strings.Contains(path, "generateContent") || strings.Contains(path, "streamGenerateContent") ||
+		strings.Contains(path, "countTokens") || strings.Contains(path, "batchGenerateContent") {
 		if si, ok := obj["system_instruction"].(map[string]any); ok {
 			if parts, ok := si["parts"].([]any); ok {
 				for _, part := range parts {

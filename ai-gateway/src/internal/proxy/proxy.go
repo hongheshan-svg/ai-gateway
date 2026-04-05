@@ -3,8 +3,10 @@ package proxy
 import (
 	"bytes"
 	"compress/gzip"
+	"context"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net"
@@ -26,6 +28,7 @@ type Stats struct {
 	TotalRequests   atomic.Int64
 	ActiveRequests  atomic.Int64
 	ProviderCounts  sync.Map // provider name -> *atomic.Int64
+	ProviderErrors  sync.Map // provider name -> *atomic.Int64
 }
 
 var stats Stats
@@ -36,10 +39,16 @@ func GetStats() map[string]any {
 		"total_requests":  stats.TotalRequests.Load(),
 		"active_requests": stats.ActiveRequests.Load(),
 		"providers":       map[string]int64{},
+		"errors":          map[string]int64{},
 	}
 	providers := result["providers"].(map[string]int64)
 	stats.ProviderCounts.Range(func(key, value any) bool {
 		providers[key.(string)] = value.(*atomic.Int64).Load()
+		return true
+	})
+	errs := result["errors"].(map[string]int64)
+	stats.ProviderErrors.Range(func(key, value any) bool {
+		errs[key.(string)] = value.(*atomic.Int64).Load()
 		return true
 	})
 	return result
@@ -50,12 +59,71 @@ func incrProvider(name string) {
 	v.(*atomic.Int64).Add(1)
 }
 
+func incrProviderError(name string) {
+	v, _ := stats.ProviderErrors.LoadOrStore(name, &atomic.Int64{})
+	v.(*atomic.Int64).Add(1)
+}
+
+// --- Circuit Breaker ---
+
+const (
+	cbThreshold = 5                // consecutive failures to trip
+	cbCooldown  = 30 * time.Second // time before half-open
+)
+
+type circuitBreaker struct {
+	mu          sync.Mutex
+	failures    int
+	lastFailure time.Time
+	tripped     bool
+}
+
+func (cb *circuitBreaker) allow() bool {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	if !cb.tripped {
+		return true
+	}
+	if time.Since(cb.lastFailure) > cbCooldown {
+		cb.tripped = false
+		cb.failures = 0
+		logger.Info("Circuit breaker half-open, allowing probe request")
+		return true
+	}
+	return false
+}
+
+func (cb *circuitBreaker) recordSuccess() {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	cb.failures = 0
+	cb.tripped = false
+}
+
+func (cb *circuitBreaker) recordFailure() {
+	cb.mu.Lock()
+	defer cb.mu.Unlock()
+	cb.failures++
+	cb.lastFailure = time.Now()
+	if cb.failures >= cbThreshold {
+		cb.tripped = true
+		logger.Warn("Circuit breaker tripped after %d failures", cb.failures)
+	}
+}
+
 // Server is the main HTTPS reverse proxy server.
 type Server struct {
 	cfg       *config.Config
 	tlsMgr    *tlsca.Manager
 	transport *http.Transport
+	httpSrv   *http.Server
 	listener  net.Listener
+	breakers  sync.Map // provider name -> *circuitBreaker
+}
+
+func (s *Server) getBreaker(provider string) *circuitBreaker {
+	v, _ := s.breakers.LoadOrStore(provider, &circuitBreaker{})
+	return v.(*circuitBreaker)
 }
 
 // NewServer creates a new proxy server.
@@ -71,6 +139,10 @@ func NewServer(cfg *config.Config, tlsMgr *tlsca.Manager) *Server {
 			MaxIdleConnsPerHost: 10,
 			IdleConnTimeout:     90 * time.Second,
 			DisableCompression:  true, // we handle compression ourselves
+			DialContext: (&net.Dialer{
+				Timeout:   10 * time.Second,
+				KeepAlive: 30 * time.Second,
+			}).DialContext,
 		},
 	}
 }
@@ -103,18 +175,22 @@ func (s *Server) Start() error {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/", s.handleRequest)
 
-	server := &http.Server{
+	s.httpSrv = &http.Server{
 		Handler:      mux,
 		ReadTimeout:  30 * time.Second,
 		WriteTimeout: 300 * time.Second, // long for SSE streams
 		IdleTimeout:  120 * time.Second,
 	}
 
-	return server.Serve(ln)
+	return s.httpSrv.Serve(ln)
 }
 
-// Close stops the proxy server.
-func (s *Server) Close() error {
+// Shutdown gracefully stops the proxy server, draining active connections.
+func (s *Server) Shutdown(ctx context.Context) error {
+	s.transport.CloseIdleConnections()
+	if s.httpSrv != nil {
+		return s.httpSrv.Shutdown(ctx)
+	}
 	if s.listener != nil {
 		return s.listener.Close()
 	}
@@ -122,6 +198,13 @@ func (s *Server) Close() error {
 }
 
 func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
+	defer func() {
+		if rv := recover(); rv != nil {
+			logger.Error("Request panic recovered: %v", rv)
+			http.Error(w, `{"error":"internal server error"}`, http.StatusInternalServerError)
+		}
+	}()
+
 	stats.TotalRequests.Add(1)
 	stats.ActiveRequests.Add(1)
 	defer stats.ActiveRequests.Add(-1)
@@ -151,18 +234,36 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	logger.Info("← %s %s%s from %s [%s]", r.Method, host, r.URL.Path, clientIP, providerName)
 	incrProvider(providerName)
 
+	// Check circuit breaker
+	cb := s.getBreaker(providerName)
+	if !cb.allow() {
+		logger.Warn("Circuit breaker open for %s, rejecting request", providerName)
+		incrProviderError(providerName)
+		http.Error(w, `{"error":"service unavailable","detail":"upstream circuit breaker open"}`, http.StatusServiceUnavailable)
+		if s.cfg.Logging.Audit {
+			logger.Audit(clientIP, r.Method, r.URL.Path, 503)
+		}
+		return
+	}
+
 	// Get rewriter for this provider
 	rw, hasRewriter := rewriter.Get(providerName)
 
-	// Read request body
+	// Read request body with size limit
 	var body []byte
 	if r.Body != nil {
+		limited := io.LimitReader(r.Body, s.cfg.Server.MaxBodySize+1)
 		var err error
-		body, err = io.ReadAll(r.Body)
+		body, err = io.ReadAll(limited)
 		r.Body.Close()
 		if err != nil {
 			logger.Error("Failed to read request body: %v", err)
 			http.Error(w, `{"error":"failed to read body"}`, http.StatusBadRequest)
+			return
+		}
+		if int64(len(body)) > s.cfg.Server.MaxBodySize {
+			logger.Warn("Request body too large: %d bytes from %s", len(body), clientIP)
+			http.Error(w, `{"error":"request body too large"}`, http.StatusRequestEntityTooLarge)
 			return
 		}
 	}
@@ -201,56 +302,61 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 	targetURL.Host = upstreamURL.Host
 
 	// For Gemini, always replace API key in query parameter
-	// (ensures client's original key is stripped and gateway key is used)
 	if providerName == "gemini" && provider.APIKey != "" {
 		q := targetURL.Query()
 		q.Set("key", provider.APIKey)
 		targetURL.RawQuery = q.Encode()
 	} else if providerName == "gemini" {
-		// No gateway key configured: strip any client-provided key
 		q := targetURL.Query()
 		q.Del("key")
 		targetURL.RawQuery = q.Encode()
 	}
 
-	// Build upstream request
-	upstreamReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL.String(), bytes.NewReader(body))
-	if err != nil {
-		logger.Error("Failed to create upstream request: %v", err)
-		http.Error(w, `{"error":"upstream request failed"}`, http.StatusBadGateway)
-		return
-	}
-
-	// Rewrite headers
+	// Build and rewrite headers for upstream request
+	var upstreamHeaders http.Header
 	if hasRewriter {
-		upstreamReq.Header = rw.RewriteHeaders(r.Header, s.cfg, provider)
+		upstreamHeaders = rw.RewriteHeaders(r.Header, s.cfg, provider)
 	} else {
-		// Copy headers without modification
+		upstreamHeaders = make(http.Header)
 		for key, values := range r.Header {
 			lower := strings.ToLower(key)
 			if lower == "host" || lower == "connection" || lower == "transfer-encoding" {
 				continue
 			}
 			for _, v := range values {
-				upstreamReq.Header.Add(key, v)
+				upstreamHeaders.Add(key, v)
 			}
 		}
 	}
+	upstreamHeaders.Set("Host", upstreamURL.Host)
+	upstreamHeaders.Set("Content-Length", fmt.Sprintf("%d", len(body)))
 
-	upstreamReq.Header.Set("Host", upstreamURL.Host)
-	upstreamReq.Header.Set("Content-Length", fmt.Sprintf("%d", len(body)))
-
-	// Forward request
-	resp, err := s.transport.RoundTrip(upstreamReq)
+	// Forward request with retry
+	resp, err := s.doWithRetry(r.Context(), providerName, targetURL.String(), r.Method, body, upstreamHeaders)
 	if err != nil {
+		cb.recordFailure()
+		incrProviderError(providerName)
 		logger.Error("Upstream error [%s]: %v", providerName, err)
-		http.Error(w, fmt.Sprintf(`{"error":"bad gateway","detail":"%s"}`, err.Error()), http.StatusBadGateway)
+		// Sanitize: don't expose internal error details to client
+		http.Error(w, `{"error":"bad gateway"}`, http.StatusBadGateway)
 		if s.cfg.Logging.Audit {
 			logger.Audit(clientIP, r.Method, r.URL.Path, 502)
 		}
 		return
 	}
 	defer resp.Body.Close()
+	cb.recordSuccess()
+
+	// Handle gzipped upstream response — decompress for client
+	respBody := resp.Body
+	if strings.Contains(resp.Header.Get("Content-Encoding"), "gzip") {
+		if gr, err := gzip.NewReader(resp.Body); err == nil {
+			respBody = gr
+			defer gr.Close()
+			resp.Header.Del("Content-Encoding")
+			resp.Header.Del("Content-Length")
+		}
+	}
 
 	// Copy response headers
 	for key, values := range resp.Header {
@@ -271,22 +377,87 @@ func (s *Server) handleRequest(w http.ResponseWriter, r *http.Request) {
 		// SSE: stream chunks to client as they arrive
 		buf := make([]byte, 4096)
 		for {
-			n, err := resp.Body.Read(buf)
+			n, readErr := respBody.Read(buf)
 			if n > 0 {
-				w.Write(buf[:n])
+				if _, writeErr := w.Write(buf[:n]); writeErr != nil {
+					logger.Debug("Client disconnected during SSE stream [%s]", providerName)
+					break
+				}
 				flusher.Flush()
 			}
-			if err != nil {
+			if readErr != nil {
+				break
+			}
+			// Check if client context is cancelled
+			if r.Context().Err() != nil {
+				logger.Debug("Client context cancelled during SSE [%s]", providerName)
 				break
 			}
 		}
 	} else {
-		io.Copy(w, resp.Body)
+		io.Copy(w, respBody)
 	}
 
 	if s.cfg.Logging.Audit {
 		logger.Audit(clientIP, r.Method, r.URL.Path, resp.StatusCode)
 	}
+}
+
+// doWithRetry sends an upstream request with retry on transient errors.
+func (s *Server) doWithRetry(ctx context.Context, provider, urlStr, method string, body []byte, headers http.Header) (*http.Response, error) {
+	maxRetries := s.cfg.Server.RetryCount
+	var lastErr error
+
+	for attempt := 0; attempt <= maxRetries; attempt++ {
+		if attempt > 0 {
+			// Exponential backoff: 500ms, 1s
+			delay := time.Duration(attempt) * 500 * time.Millisecond
+			timer := time.NewTimer(delay)
+			select {
+			case <-timer.C:
+			case <-ctx.Done():
+				timer.Stop()
+				return nil, ctx.Err()
+			}
+			logger.Warn("Upstream retry %d/%d [%s]", attempt, maxRetries, provider)
+		}
+
+		req, err := http.NewRequestWithContext(ctx, method, urlStr, bytes.NewReader(body))
+		if err != nil {
+			return nil, fmt.Errorf("create request: %w", err)
+		}
+		req.Header = headers
+
+		resp, err := s.transport.RoundTrip(req)
+		if err == nil {
+			return resp, nil
+		}
+		// RoundTrip can return both resp and err; drain resp body to prevent leak
+		if resp != nil {
+			resp.Body.Close()
+		}
+		lastErr = err
+
+		if !isRetryable(err) {
+			return nil, err
+		}
+	}
+	return nil, lastErr
+}
+
+// isRetryable returns true for transient network errors worth retrying.
+func isRetryable(err error) bool {
+	if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
+		return false
+	}
+	var netErr net.Error
+	if errors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "connection reset") ||
+		strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "EOF")
 }
 
 // StartCADownloadServer starts a plain HTTP server for CA certificate download.
@@ -311,6 +482,7 @@ func StartCADownloadServer(cfg *config.Config, tlsMgr *tlsca.Manager) error {
 		status := map[string]any{
 			"status":         "running",
 			"ca_fingerprint": tlsMgr.CACertFingerprint(),
+			"ca_info":        tlsMgr.CACertInfo(),
 			"domains":        cfg.AllDomains(),
 			"stats":          GetStats(),
 			"providers":      map[string]any{},
@@ -376,13 +548,24 @@ update-ca-certificates</pre>
 	return http.ListenAndServe(addr, mux)
 }
 
+// maxDecompressedSize caps gzip decompression to prevent zip-bomb OOM.
+const maxDecompressedSize = 100 * 1024 * 1024 // 100 MB
+
 func decompressGzip(data []byte) ([]byte, error) {
 	reader, err := gzip.NewReader(bytes.NewReader(data))
 	if err != nil {
 		return nil, err
 	}
 	defer reader.Close()
-	return io.ReadAll(reader)
+	limited := io.LimitReader(reader, maxDecompressedSize+1)
+	result, err := io.ReadAll(limited)
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(result)) > maxDecompressedSize {
+		return nil, fmt.Errorf("decompressed body exceeds %d bytes", maxDecompressedSize)
+	}
+	return result, nil
 }
 
 func compressGzip(data []byte) ([]byte, error) {

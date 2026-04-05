@@ -1,13 +1,18 @@
 package config
 
 import (
+	"context"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"gopkg.in/yaml.v3"
 )
+
+const uciTimeout = 5 * time.Second
 
 // Config is the runtime configuration, loaded from UCI or a YAML file.
 type Config struct {
@@ -25,6 +30,8 @@ type ServerConfig struct {
 	CADownloadPort int    `yaml:"ca_download_port"`
 	CADir          string `yaml:"ca_dir"`
 	CertCacheDir   string `yaml:"cert_cache_dir"`
+	MaxBodySize    int64  `yaml:"max_body_size"`  // max request body bytes, default 10MB
+	RetryCount     int    `yaml:"retry_count"`    // upstream retry attempts, default 2
 }
 
 type ProviderConfig struct {
@@ -76,6 +83,49 @@ type ProcessConfig struct {
 type LoggingConfig struct {
 	Level string `yaml:"level"`
 	Audit bool   `yaml:"audit"`
+}
+
+// Validate checks the config for required fields and sane values.
+func (c *Config) Validate() error {
+	if c.Server.ListenPort < 1 || c.Server.ListenPort > 65535 {
+		return fmt.Errorf("invalid listen_port: %d", c.Server.ListenPort)
+	}
+	if c.Server.CADownloadPort < 1 || c.Server.CADownloadPort > 65535 {
+		return fmt.Errorf("invalid ca_download_port: %d", c.Server.CADownloadPort)
+	}
+	if c.Server.ListenPort == c.Server.CADownloadPort {
+		return fmt.Errorf("listen_port and ca_download_port must differ")
+	}
+	if c.Identity.DeviceID != "" && c.Identity.DeviceID != "auto" && len(c.Identity.DeviceID) < 16 {
+		return fmt.Errorf("device_id must be empty, 'auto', or at least 16 characters")
+	}
+	for name, p := range c.Upstream {
+		if !p.Enabled {
+			continue
+		}
+		if p.Upstream == "" {
+			return fmt.Errorf("provider %s: upstream URL required", name)
+		}
+		if _, err := url.Parse(p.Upstream); err != nil {
+			return fmt.Errorf("provider %s: invalid upstream URL: %w", name, err)
+		}
+		if len(p.Domains) == 0 {
+			return fmt.Errorf("provider %s: at least one domain required", name)
+		}
+		if p.APIKey == "" && p.OAuthAccessToken == "" {
+			return fmt.Errorf("provider %s: api_key or oauth_access_token required", name)
+		}
+	}
+	if c.Process.RSSRange[0] > c.Process.RSSRange[1] {
+		return fmt.Errorf("rss_min must be <= rss_max")
+	}
+	if c.Process.HeapTotalRange[0] > c.Process.HeapTotalRange[1] {
+		return fmt.Errorf("heap_total_min must be <= heap_total_max")
+	}
+	if c.Process.HeapUsedRange[0] > c.Process.HeapUsedRange[1] {
+		return fmt.Errorf("heap_used_min must be <= heap_used_max")
+	}
+	return nil
 }
 
 // LoadFromYAML loads config from a YAML file.
@@ -254,11 +304,19 @@ func applyDefaults(cfg *Config) {
 	if cfg.Process.HeapUsedRange == [2]int64{0, 0} {
 		cfg.Process.HeapUsedRange = [2]int64{100000000, 200000000}
 	}
+	if cfg.Server.MaxBodySize == 0 {
+		cfg.Server.MaxBodySize = 10 * 1024 * 1024 // 10MB
+	}
+	if cfg.Server.RetryCount == 0 {
+		cfg.Server.RetryCount = 2
+	}
 }
 
 // uciGet calls `uci get <key>` and returns the result, or defaultVal on error.
 func uciGet(key, defaultVal string) string {
-	out, err := exec.Command("uci", "get", key).Output()
+	ctx, cancel := context.WithTimeout(context.Background(), uciTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "uci", "get", key).Output()
 	if err != nil {
 		return defaultVal
 	}
@@ -280,7 +338,9 @@ func uciGetInt(key string, defaultVal int) int {
 
 // uciGetList calls `uci get <key>` for list options.
 func uciGetList(key string) []string {
-	out, err := exec.Command("uci", "get", key).Output()
+	ctx, cancel := context.WithTimeout(context.Background(), uciTimeout)
+	defer cancel()
+	out, err := exec.CommandContext(ctx, "uci", "get", key).Output()
 	if err != nil {
 		return nil
 	}

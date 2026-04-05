@@ -32,22 +32,42 @@ return view.extend({
 		var caPort = uci.get('ai-gateway', 'global', 'ca_download_port') || '8080';
 		var hostname = window.location.hostname;
 		var caFingerprint = status ? status.ca_fingerprint : _('(service not running)');
+		var caInfo = (status && status.ca_info) ? status.ca_info : null;
+
+		var certInfoRows = [
+			E('tr', { 'class': 'tr' }, [
+				E('td', { 'class': 'td', 'width': '33%' }, E('strong', {}, _('SHA-256 Fingerprint'))),
+				E('td', { 'class': 'td' }, E('code', { 'style': 'word-break:break-all;font-size:0.85em' }, caFingerprint))
+			]),
+			E('tr', { 'class': 'tr' }, [
+				E('td', { 'class': 'td' }, E('strong', {}, _('CA Directory'))),
+				E('td', { 'class': 'td' }, E('code', {}, uci.get('ai-gateway', 'global', 'ca_dir') || '/etc/ai-gateway/ca'))
+			])
+		];
+
+		if (caInfo) {
+			certInfoRows.push(
+				E('tr', { 'class': 'tr' }, [
+					E('td', { 'class': 'td' }, E('strong', {}, _('Subject'))),
+					E('td', { 'class': 'td' }, caInfo.subject || '-')
+				]),
+				E('tr', { 'class': 'tr' }, [
+					E('td', { 'class': 'td' }, E('strong', {}, _('Valid From'))),
+					E('td', { 'class': 'td' }, caInfo.not_before ? new Date(caInfo.not_before).toLocaleString() : '-')
+				]),
+				E('tr', { 'class': 'tr' }, [
+					E('td', { 'class': 'td' }, E('strong', {}, _('Valid Until'))),
+					E('td', { 'class': 'td' }, caInfo.not_after ? new Date(caInfo.not_after).toLocaleString() : '-')
+				])
+			);
+		}
 
 		var body = E('div', { 'class': 'cbi-map' }, [
 			E('h2', {}, _('AI Gateway - Certificates')),
 
 			E('div', { 'class': 'cbi-section' }, [
 				E('h3', {}, _('CA Certificate')),
-				E('table', { 'class': 'table' }, [
-					E('tr', { 'class': 'tr' }, [
-						E('td', { 'class': 'td', 'width': '33%' }, E('strong', {}, _('SHA-256 Fingerprint'))),
-						E('td', { 'class': 'td' }, E('code', { 'style': 'word-break:break-all;font-size:0.85em' }, caFingerprint))
-					]),
-					E('tr', { 'class': 'tr' }, [
-						E('td', { 'class': 'td' }, E('strong', {}, _('CA Directory'))),
-						E('td', { 'class': 'td' }, E('code', {}, uci.get('ai-gateway', 'global', 'ca_dir') || '/etc/ai-gateway/ca'))
-					])
-				])
+				E('table', { 'class': 'table' }, certInfoRows)
 			]),
 
 			E('div', { 'class': 'cbi-section' }, [

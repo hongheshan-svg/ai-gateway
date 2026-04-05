@@ -7,6 +7,7 @@ STOP=10
 CONF="ai-gateway"
 PROG="/usr/bin/ai-gateway"
 DNSMASQ_DIR="/tmp/dnsmasq.d/ai-gateway"
+FW_CHAIN="ai_gateway"
 
 start_service() {
 	config_load "$CONF"
@@ -28,6 +29,9 @@ start_service() {
 	# Setup DNS hijacking for all enabled provider domains
 	setup_dns_hijack
 
+	# Setup firewall redirect rules
+	setup_firewall
+
 	# Start the daemon
 	procd_open_instance "ai-gateway"
 	procd_set_param command "$PROG" -uci
@@ -41,6 +45,8 @@ start_service() {
 }
 
 stop_service() {
+	# Clean up firewall rules
+	cleanup_firewall
 	# Clean up DNS hijacking
 	cleanup_dns_hijack
 	logger -t ai-gateway "Service stopped"
@@ -55,7 +61,7 @@ service_triggers() {
 	procd_add_reload_trigger "$CONF"
 }
 
-# Get the router's LAN IP address for DNS hijacking
+# Get the router's LAN IPv4 address for DNS hijacking
 get_lan_ip() {
 	local lan_ip
 	lan_ip=$(uci -q get network.lan.ipaddr)
@@ -68,10 +74,78 @@ get_lan_ip() {
 	echo "$lan_ip"
 }
 
+# Get the router's LAN IPv6 address (ULA or global, not link-local)
+get_lan_ip6() {
+	local lan_ip6
+	lan_ip6=$(ip -6 addr show br-lan 2>/dev/null | grep -v 'fe80' | grep -oP 'inet6 \K[0-9a-f:]+' | head -1)
+	echo "$lan_ip6"
+}
+
+# Get all LAN interfaces (supports multiple VLANs / guest networks)
+get_lan_interfaces() {
+	local ifaces
+	# Try to find all LAN-type interfaces
+	for iface in $(uci -q show network | grep '=interface' | cut -d. -f2 | cut -d= -f1); do
+		local proto device
+		proto=$(uci -q get network."$iface".proto)
+		device=$(uci -q get network."$iface".device 2>/dev/null || uci -q get network."$iface".ifname 2>/dev/null)
+		# Include static/dhcp interfaces that are not WAN
+		case "$iface" in
+			wan|wan6|loopback) continue ;;
+		esac
+		[ -n "$device" ] && echo "$device"
+	done
+	# Fallback: at least br-lan
+	if [ -z "$ifaces" ] && [ -e "/sys/class/net/br-lan" ]; then
+		echo "br-lan"
+	fi
+}
+
+# Setup firewall redirect rules for HTTPS interception
+setup_firewall() {
+	local listen_port
+	config_get listen_port global listen_port "443"
+
+	cleanup_firewall 2>/dev/null
+
+	# Create custom chain
+	iptables -t nat -N "$FW_CHAIN" 2>/dev/null
+	ip6tables -t nat -N "$FW_CHAIN" 2>/dev/null
+
+	# For each LAN interface, redirect HTTPS traffic (port 443) to our listen port
+	for iface in $(get_lan_interfaces); do
+		# IPv4 redirect
+		iptables -t nat -A "$FW_CHAIN" -i "$iface" -p tcp --dport 443 \
+			-j REDIRECT --to-port "$listen_port" 2>/dev/null
+		# IPv6 redirect (if ip6tables nat is available)
+		ip6tables -t nat -A "$FW_CHAIN" -i "$iface" -p tcp --dport 443 \
+			-j REDIRECT --to-port "$listen_port" 2>/dev/null
+	done
+
+	# Insert chain into PREROUTING
+	iptables -t nat -I PREROUTING -j "$FW_CHAIN" 2>/dev/null
+	ip6tables -t nat -I PREROUTING -j "$FW_CHAIN" 2>/dev/null
+
+	logger -t ai-gateway "Firewall rules installed (port $listen_port)"
+}
+
+# Remove firewall redirect rules
+cleanup_firewall() {
+	# Remove from PREROUTING
+	iptables -t nat -D PREROUTING -j "$FW_CHAIN" 2>/dev/null
+	ip6tables -t nat -D PREROUTING -j "$FW_CHAIN" 2>/dev/null
+	# Flush and delete chain
+	iptables -t nat -F "$FW_CHAIN" 2>/dev/null
+	iptables -t nat -X "$FW_CHAIN" 2>/dev/null
+	ip6tables -t nat -F "$FW_CHAIN" 2>/dev/null
+	ip6tables -t nat -X "$FW_CHAIN" 2>/dev/null
+}
+
 # Setup dnsmasq DNS hijacking for AI API domains
 setup_dns_hijack() {
-	local lan_ip
+	local lan_ip lan_ip6
 	lan_ip=$(get_lan_ip)
+	lan_ip6=$(get_lan_ip6)
 
 	mkdir -p "$DNSMASQ_DIR"
 
@@ -98,14 +172,20 @@ setup_dns_hijack() {
 		fi
 
 		for domain in $domains; do
+			# IPv4 hijack
 			echo "address=/$domain/$lan_ip" >> "$conf_file"
 			logger -t ai-gateway "DNS hijack: $domain → $lan_ip"
+			# IPv6 hijack (if LAN has IPv6)
+			if [ -n "$lan_ip6" ]; then
+				echo "address=/$domain/$lan_ip6" >> "$conf_file"
+				logger -t ai-gateway "DNS hijack (IPv6): $domain → $lan_ip6"
+			fi
 		done
 	done
 
-	# Reload dnsmasq to pick up new config
+	# Reload dnsmasq to pick up new config (use reload instead of restart)
 	if [ -f "$conf_file" ] && [ -s "$conf_file" ]; then
-		/etc/init.d/dnsmasq restart 2>/dev/null
+		/etc/init.d/dnsmasq reload 2>/dev/null || /etc/init.d/dnsmasq restart 2>/dev/null
 		logger -t ai-gateway "dnsmasq reloaded with AI domain hijacking"
 	fi
 }
@@ -114,7 +194,7 @@ setup_dns_hijack() {
 cleanup_dns_hijack() {
 	if [ -d "$DNSMASQ_DIR" ]; then
 		rm -rf "$DNSMASQ_DIR"
-		/etc/init.d/dnsmasq restart 2>/dev/null
+		/etc/init.d/dnsmasq reload 2>/dev/null || /etc/init.d/dnsmasq restart 2>/dev/null
 		logger -t ai-gateway "DNS hijack rules removed, dnsmasq reloaded"
 	fi
 }

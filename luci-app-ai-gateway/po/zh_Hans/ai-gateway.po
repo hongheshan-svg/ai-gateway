@@ -342,3 +342,84 @@ msgstr "重新生成 CA"
 
 msgid "(service not running)"
 msgstr "(服务未运行)"
+
+msgid "Errors"
+msgstr "错误数"
+
+msgid "Test Connection"
+msgstr "测试连接"
+
+msgid "Testing..."
+msgstr "测试中..."
+
+msgid "Connected"
+msgstr "已连接"
+
+msgid "Not enabled"
+msgstr "未启用"
+
+msgid "Parse error"
+msgstr "解析错误"
+
+msgid "Gateway unreachable"
+msgstr "网关不可达"
+
+msgid "Quick Presets"
+msgstr "快速预设"
+
+msgid "Apply a preset environment profile. This fills in the fields below."
+msgstr "应用预设环境配置。这将填充下方的字段。"
+
+msgid "macOS ARM64"
+msgstr "macOS ARM64"
+
+msgid "Ubuntu x64"
+msgstr "Ubuntu x64"
+
+msgid "Windows x64"
+msgstr "Windows x64"
+
+msgid "Apply"
+msgstr "应用"
+
+msgid "Subject"
+msgstr "主题名称"
+
+msgid "Valid From"
+msgstr "生效时间"
+
+msgid "Valid Until"
+msgstr "过期时间"
+
+msgid "Logs"
+msgstr "日志"
+
+msgid "AI Gateway - Logs"
+msgstr "AI 网关 - 日志"
+
+msgid "Refresh"
+msgstr "刷新"
+
+msgid "Clear Display"
+msgstr "清除显示"
+
+msgid "No log entries found."
+msgstr "未找到日志条目。"
+
+msgid "Double-click the file → \"Install Certificate\""
+msgstr "双击文件 → \"安装证书\""
+
+msgid "Tap \"Allow\" when prompted to download the profile"
+msgstr "提示下载描述文件时点击 \"允许\""
+
+msgid "Go to Settings → General → VPN & Device Management → Install"
+msgstr "前往 设置 → 通用 → VPN 与设备管理 → 安装"
+
+msgid "Go to Settings → General → About → Certificate Trust Settings"
+msgstr "前往 设置 → 通用 → 关于 → 证书信任设置"
+
+msgid "Enable \"AI Gateway CA\""
+msgstr "启用 \"AI Gateway CA\""
+
+msgid "Must be \"auto\" or a 64-character hex string"
+msgstr "必须是 \"auto\" 或 64 字符十六进制字符串"

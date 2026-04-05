@@ -4,12 +4,14 @@
 		"read": {
 			"ubus": {
 				"service": ["list"],
-				"uci": ["ai-gateway"]
+				"uci": ["ai-gateway"],
+				"luci": ["getInitList"]
 			},
 			"uci": ["ai-gateway"],
 			"file": {
 				"/etc/ai-gateway/ca/ca.crt": ["read"],
-				"/tmp/ai-gateway/*": ["read"]
+				"/tmp/ai-gateway/*": ["read"],
+				"/usr/bin/logread": ["exec"]
 			}
 		},
 		"write": {

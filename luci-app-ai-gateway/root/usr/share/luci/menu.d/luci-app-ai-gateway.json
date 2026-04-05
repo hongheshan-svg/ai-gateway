@@ -41,5 +41,13 @@
 			"type": "view",
 			"path": "ai-gateway/certs"
 		}
+	},
+	"admin/services/ai-gateway/logs": {
+		"title": "Logs",
+		"order": 50,
+		"action": {
+			"type": "view",
+			"path": "ai-gateway/logs"
+		}
 	}
 }

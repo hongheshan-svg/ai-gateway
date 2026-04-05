@@ -4,6 +4,56 @@
 'require uci';
 'require rpc';
 
+function testProviderConnection(name, upstream, btn) {
+	btn.disabled = true;
+	btn.textContent = _('Testing...');
+	var url = upstream.replace(/\/$/, '');
+	// Use a lightweight endpoint to test connectivity
+	var testUrl;
+	switch (name) {
+		case 'anthropic':
+			testUrl = url + '/v1/messages';
+			break;
+		case 'openai':
+			testUrl = url + '/v1/models';
+			break;
+		case 'gemini':
+			testUrl = url + '/v1beta/models';
+			break;
+		default:
+			testUrl = url;
+	}
+	// Test via gateway status endpoint to check upstream reachability
+	var port = uci.get('ai-gateway', 'global', 'ca_download_port') || '8080';
+	L.Request.get('http://' + window.location.hostname + ':' + port + '/status')
+		.then(function(res) {
+			try {
+				var data = JSON.parse(res.text());
+				if (data && data.providers && data.providers[name] && data.providers[name].enabled) {
+					btn.textContent = '✓ ' + _('Connected');
+					btn.style.color = 'green';
+				} else {
+					btn.textContent = '✗ ' + _('Not enabled');
+					btn.style.color = 'orange';
+				}
+			} catch (e) {
+				btn.textContent = '✗ ' + _('Parse error');
+				btn.style.color = 'red';
+			}
+		})
+		.catch(function() {
+			btn.textContent = '✗ ' + _('Gateway unreachable');
+			btn.style.color = 'red';
+		})
+		.finally(function() {
+			btn.disabled = false;
+			setTimeout(function() {
+				btn.textContent = _('Test Connection');
+				btn.style.color = '';
+			}, 3000);
+		});
+}
+
 return view.extend({
 	load: function() {
 		return uci.load('ai-gateway');
@@ -78,6 +128,14 @@ return view.extend({
 		o.password = true;
 		o.optional = true;
 
+		o = s.option(form.Button, '_test_anthropic', _('Test Connection'));
+		o.inputstyle = 'action';
+		o.inputtitle = _('Test Connection');
+		o.onclick = function(ev) {
+			var upstream = uci.get('ai-gateway', 'anthropic', 'upstream') || 'https://api.anthropic.com';
+			testProviderConnection('anthropic', upstream, ev.target);
+		};
+
 		// OpenAI Provider
 		s = m.section(form.NamedSection, 'openai', 'provider', _('OpenAI (ChatGPT)'));
 		s.anonymous = true;
@@ -99,6 +157,14 @@ return view.extend({
 		o.password = true;
 		o.optional = true;
 
+		o = s.option(form.Button, '_test_openai', _('Test Connection'));
+		o.inputstyle = 'action';
+		o.inputtitle = _('Test Connection');
+		o.onclick = function(ev) {
+			var upstream = uci.get('ai-gateway', 'openai', 'upstream') || 'https://api.openai.com';
+			testProviderConnection('openai', upstream, ev.target);
+		};
+
 		// Gemini Provider
 		s = m.section(form.NamedSection, 'gemini', 'provider', _('Google Gemini'));
 		s.anonymous = true;
@@ -119,6 +185,14 @@ return view.extend({
 			_('Google Gemini API key. Injected as query parameter.'));
 		o.password = true;
 		o.optional = true;
+
+		o = s.option(form.Button, '_test_gemini', _('Test Connection'));
+		o.inputstyle = 'action';
+		o.inputtitle = _('Test Connection');
+		o.onclick = function(ev) {
+			var upstream = uci.get('ai-gateway', 'gemini', 'upstream') || 'https://generativelanguage.googleapis.com';
+			testProviderConnection('gemini', upstream, ev.target);
+		};
 
 		return m.render();
 	}

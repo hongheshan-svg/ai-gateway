@@ -27,9 +27,14 @@ func (r *OpenAIRewriter) RewriteBody(body []byte, path string, cfg *config.Confi
 
 	modified := false
 
-	// Normalize "user" field to a canonical value
+	// Normalize "user" field to a canonical value (applies to all endpoints)
 	if _, ok := obj["user"]; ok {
-		obj["user"] = cfg.Identity.DeviceID[:16]
+		deviceID := cfg.Identity.DeviceID
+		if len(deviceID) >= 16 {
+			obj["user"] = deviceID[:16]
+		} else {
+			obj["user"] = deviceID
+		}
 		modified = true
 		logger.Debug("OpenAI: Rewrote user field")
 	}
@@ -40,6 +45,18 @@ func (r *OpenAIRewriter) RewriteBody(body []byte, path string, cfg *config.Confi
 			delete(obj, field)
 			modified = true
 			logger.Debug("OpenAI: Removed field %s", field)
+		}
+	}
+
+	// For embeddings/images/audio, also strip model-specific metadata
+	if strings.Contains(path, "/v1/embeddings") ||
+		strings.Contains(path, "/v1/images") ||
+		strings.Contains(path, "/v1/audio") {
+		for _, field := range []string{"metadata", "client_id"} {
+			if _, ok := obj[field]; ok {
+				delete(obj, field)
+				modified = true
+			}
 		}
 	}
 

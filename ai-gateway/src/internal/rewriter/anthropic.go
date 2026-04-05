@@ -37,8 +37,11 @@ func (r *AnthropicRewriter) RewriteBody(body []byte, path string, cfg *config.Co
 		return body
 	}
 
-	if strings.HasPrefix(path, "/v1/messages") {
+	if strings.HasPrefix(path, "/v1/messages") || strings.HasPrefix(path, "/v1/beta/messages") {
 		rewriteMessagesBody(obj, cfg)
+	} else if strings.HasPrefix(path, "/v1/beta/") {
+		// Beta endpoints: normalize identity fields
+		rewriteGenericIdentity(obj, cfg)
 	} else if strings.Contains(path, "/event_logging/batch") {
 		rewriteEventBatch(obj, cfg)
 	} else if strings.Contains(path, "/policy_limits") || strings.Contains(path, "/settings") {
@@ -374,7 +377,10 @@ func computeCCH(firstUserMessage, version string) string {
 
 func fallbackHash() string {
 	b := make([]byte, 2)
-	rand.Read(b)
+	if _, err := rand.Read(b); err != nil {
+		logger.Warn("fallbackHash: rand.Read failed: %v", err)
+		return "000"
+	}
 	return hex.EncodeToString(b)[:3]
 }
 

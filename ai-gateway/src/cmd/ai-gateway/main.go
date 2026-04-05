@@ -1,11 +1,15 @@
 package main
 
 import (
+	"context"
+	"errors"
 	"flag"
 	"fmt"
+	"net/http"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"github.com/zhengshan/openwrt-ai-gateway/internal/config"
 	"github.com/zhengshan/openwrt-ai-gateway/internal/identity"
@@ -57,16 +61,26 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Validate configuration
+	if err := cfg.Validate(); err != nil {
+		fmt.Fprintf(os.Stderr, "Invalid config: %v\n", err)
+		os.Exit(1)
+	}
+
 	// Auto-generate device_id if not set
 	if cfg.Identity.DeviceID == "" || cfg.Identity.DeviceID == "auto" {
 		cfg.Identity.DeviceID = identity.GenerateDeviceID()
-		logger.Info("Auto-generated device_id: %s", cfg.Identity.DeviceID[:8]+"...")
+		logger.Info("Auto-generated device_id: %s...", cfg.Identity.DeviceID[:8])
 	}
 
 	logger.SetLevel(cfg.Logging.Level)
 
 	logger.Info("AI Gateway %s starting...", version)
-	logger.Info("Canonical device_id: %s...", cfg.Identity.DeviceID[:8])
+	if len(cfg.Identity.DeviceID) >= 8 {
+		logger.Info("Canonical device_id: %s...", cfg.Identity.DeviceID[:8])
+	} else {
+		logger.Info("Canonical device_id: %s", cfg.Identity.DeviceID)
+	}
 	logger.Info("Canonical email: %s", cfg.Identity.Email)
 
 	// Verify at least one provider is enabled
@@ -90,29 +104,53 @@ func main() {
 	}
 	logger.Info("CA fingerprint: %s", tlsMgr.CACertFingerprint())
 
+	// Error channel to catch server failures
+	errCh := make(chan error, 2)
+
 	// Start CA download HTTP server in background
 	go func() {
-		if err := proxy.StartCADownloadServer(cfg, tlsMgr); err != nil {
-			logger.Error("CA download server failed: %v", err)
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error("CA download server panic: %v", r)
+				errCh <- fmt.Errorf("CA download server panic: %v", r)
+			}
+		}()
+		if err := proxy.StartCADownloadServer(cfg, tlsMgr); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- fmt.Errorf("CA download server: %w", err)
 		}
 	}()
 
 	// Start HTTPS proxy server in background
 	srv := proxy.NewServer(cfg, tlsMgr)
 	go func() {
-		if err := srv.Start(); err != nil {
-			logger.Error("Proxy server failed: %v", err)
-			os.Exit(1)
+		defer func() {
+			if r := recover(); r != nil {
+				logger.Error("Proxy server panic: %v", r)
+				errCh <- fmt.Errorf("proxy server panic: %v", r)
+			}
+		}()
+		if err := srv.Start(); err != nil && !errors.Is(err, http.ErrServerClosed) {
+			errCh <- fmt.Errorf("proxy server: %w", err)
 		}
 	}()
 
-	// Wait for shutdown signal
+	// Wait for shutdown signal or fatal server error
 	sigCh := make(chan os.Signal, 1)
 	signal.Notify(sigCh, syscall.SIGINT, syscall.SIGTERM)
-	sig := <-sigCh
-	logger.Info("Received %s, shutting down...", sig)
 
-	srv.Close()
+	select {
+	case sig := <-sigCh:
+		logger.Info("Received %s, shutting down...", sig)
+	case err := <-errCh:
+		logger.Error("Fatal server error: %v", err)
+	}
+
+	// Graceful shutdown: drain active connections with timeout
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	if err := srv.Shutdown(ctx); err != nil {
+		logger.Error("Shutdown error: %v", err)
+	}
 	logger.Info("AI Gateway stopped.")
 }
 

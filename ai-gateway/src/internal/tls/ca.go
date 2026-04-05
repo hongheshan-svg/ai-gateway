@@ -20,6 +20,16 @@ import (
 	"github.com/zhengshan/openwrt-ai-gateway/internal/logger"
 )
 
+const (
+	certCacheTTL     = 24 * time.Hour
+	certCacheMaxSize = 1000
+)
+
+type cachedCert struct {
+	cert      *tls.Certificate
+	createdAt time.Time
+}
+
 // Manager handles CA certificate generation, domain certificate signing, and caching.
 type Manager struct {
 	caDir        string
@@ -27,7 +37,7 @@ type Manager struct {
 	caCert       *x509.Certificate
 	caKey        *ecdsa.PrivateKey
 	caTLSCert    tls.Certificate
-	certCache    map[string]*tls.Certificate
+	certCache    map[string]*cachedCert
 	mu           sync.RWMutex
 }
 
@@ -36,7 +46,7 @@ func NewManager(caDir, cacheDir string) (*Manager, error) {
 	m := &Manager{
 		caDir:     caDir,
 		cacheDir:  cacheDir,
-		certCache: make(map[string]*tls.Certificate),
+		certCache: make(map[string]*cachedCert),
 	}
 	if err := os.MkdirAll(caDir, 0700); err != nil {
 		return nil, fmt.Errorf("create CA dir: %w", err)
@@ -174,9 +184,9 @@ func (m *Manager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, 
 	}
 
 	m.mu.RLock()
-	if cert, ok := m.certCache[domain]; ok {
+	if cached, ok := m.certCache[domain]; ok && time.Since(cached.createdAt) < certCacheTTL {
 		m.mu.RUnlock()
-		return cert, nil
+		return cached.cert, nil
 	}
 	m.mu.RUnlock()
 
@@ -184,17 +194,46 @@ func (m *Manager) GetCertificate(hello *tls.ClientHelloInfo) (*tls.Certificate, 
 	defer m.mu.Unlock()
 
 	// Double-check after acquiring write lock
-	if cert, ok := m.certCache[domain]; ok {
-		return cert, nil
+	if cached, ok := m.certCache[domain]; ok && time.Since(cached.createdAt) < certCacheTTL {
+		return cached.cert, nil
+	}
+
+	// Evict expired entries and enforce max size
+	if len(m.certCache) >= certCacheMaxSize {
+		m.evictExpired()
+	}
+	// If still at max after eviction, remove oldest
+	if len(m.certCache) >= certCacheMaxSize {
+		var oldestKey string
+		var oldestTime time.Time
+		for k, v := range m.certCache {
+			if oldestKey == "" || v.createdAt.Before(oldestTime) {
+				oldestKey = k
+				oldestTime = v.createdAt
+			}
+		}
+		if oldestKey != "" {
+			delete(m.certCache, oldestKey)
+		}
 	}
 
 	cert, err := m.signDomainCert(domain)
 	if err != nil {
 		return nil, err
 	}
-	m.certCache[domain] = cert
+	m.certCache[domain] = &cachedCert{cert: cert, createdAt: time.Now()}
 	logger.Debug("Generated certificate for domain: %s", domain)
 	return cert, nil
+}
+
+// evictExpired removes expired entries from the cert cache (must be called with write lock held).
+func (m *Manager) evictExpired() {
+	now := time.Now()
+	for k, v := range m.certCache {
+		if now.Sub(v.createdAt) >= certCacheTTL {
+			delete(m.certCache, k)
+		}
+	}
 }
 
 func (m *Manager) signDomainCert(domain string) (*tls.Certificate, error) {
@@ -247,6 +286,23 @@ func (m *Manager) CACertPEM() []byte {
 // CACertDER returns the CA certificate in DER format.
 func (m *Manager) CACertDER() []byte {
 	return m.caCert.Raw
+}
+
+// CACertInfo returns key fields about the CA certificate for status display.
+func (m *Manager) CACertInfo() map[string]any {
+	return map[string]any{
+		"subject":    m.caCert.Subject.CommonName,
+		"issuer":     m.caCert.Issuer.CommonName,
+		"not_before": m.caCert.NotBefore.Format(time.RFC3339),
+		"not_after":  m.caCert.NotAfter.Format(time.RFC3339),
+	}
+}
+
+// CertCacheSize returns the number of cached domain certificates.
+func (m *Manager) CertCacheSize() int {
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+	return len(m.certCache)
 }
 
 // CACertFingerprint returns SHA-256 fingerprint of the CA cert.
