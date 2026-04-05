@@ -5,7 +5,7 @@ PKG_VERSION:=0.1.0
 PKG_RELEASE:=1
 
 PKG_SOURCE_PROTO:=git
-PKG_SOURCE_URL:=https://github.com/zhengshan/openwrt-ai-gateway.git
+PKG_SOURCE_URL:=https://github.com/hongheshan-svg/ai-gateway.git
 PKG_SOURCE_VERSION:=HEAD
 PKG_MIRROR_HASH:=skip
 
@@ -29,8 +29,7 @@ define Package/ai-gateway
   SUBMENU:=Web Servers/Proxies
   TITLE:=AI API Identity Gateway
   DEPENDS:=$(GO_ARCH_DEPENDS) +ca-bundle
-  URL:=https://github.com/zhengshan/openwrt-ai-gateway
-  PKGARCH:=all
+  URL:=https://github.com/hongheshan-svg/ai-gateway
 endef
 
 define Package/ai-gateway/description
