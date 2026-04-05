@@ -66,7 +66,7 @@ get_lan_ip() {
 	local lan_ip
 	lan_ip=$(uci -q get network.lan.ipaddr)
 	if [ -z "$lan_ip" ]; then
-		lan_ip=$(ip -4 addr show br-lan 2>/dev/null | grep -oP 'inet \K[\d.]+' | head -1)
+		lan_ip=$(ip -4 addr show br-lan 2>/dev/null | awk '/inet /{split($2,a,"/"); print a[1]; exit}')
 	fi
 	if [ -z "$lan_ip" ]; then
 		lan_ip="192.168.1.1"
@@ -77,7 +77,7 @@ get_lan_ip() {
 # Get the router's LAN IPv6 address (ULA or global, not link-local)
 get_lan_ip6() {
 	local lan_ip6
-	lan_ip6=$(ip -6 addr show br-lan 2>/dev/null | grep -v 'fe80' | grep -oP 'inet6 \K[0-9a-f:]+' | head -1)
+	lan_ip6=$(ip -6 addr show br-lan 2>/dev/null | awk '/inet6 / && !/fe80/{split($2,a,"/"); print a[1]; exit}')
 	echo "$lan_ip6"
 }
 
@@ -162,8 +162,12 @@ setup_dns_hijack() {
 		[ "$enabled" = "1" ] || continue
 
 		local domains
-		domains=$(uci -q get ai-gateway.$provider.domains)
+		# UCI list: iterate properly to get all domain entries
+		domains=$(uci -q get ai-gateway.$provider.domains 2>/dev/null)
 		if [ -z "$domains" ]; then
+			# Try show format for multi-value lists
+			domains=$(uci -q show ai-gateway.$provider.domains 2>/dev/null | sed "s/.*=//;s/'//g")
+		fi
 			case "$provider" in
 				anthropic) domains="api.anthropic.com" ;;
 				openai) domains="api.openai.com" ;;

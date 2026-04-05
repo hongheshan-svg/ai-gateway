@@ -135,8 +135,8 @@ func NewServer(cfg *config.Config, tlsMgr *tlsca.Manager) *Server {
 			TLSClientConfig: &tls.Config{
 				MinVersion: tls.VersionTLS12,
 			},
-			MaxIdleConns:        100,
-			MaxIdleConnsPerHost: 10,
+			MaxIdleConns:        20,
+			MaxIdleConnsPerHost: 5,
 			IdleConnTimeout:     90 * time.Second,
 			DisableCompression:  true, // we handle compression ourselves
 			DialContext: (&net.Dialer{
@@ -549,7 +549,8 @@ update-ca-certificates</pre>
 }
 
 // maxDecompressedSize caps gzip decompression to prevent zip-bomb OOM.
-const maxDecompressedSize = 100 * 1024 * 1024 // 100 MB
+// Keep conservative for memory-constrained routers.
+const maxDecompressedSize = 10 * 1024 * 1024 // 10 MB
 
 func decompressGzip(data []byte) ([]byte, error) {
 	reader, err := gzip.NewReader(bytes.NewReader(data))

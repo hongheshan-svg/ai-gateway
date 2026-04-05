@@ -22,7 +22,7 @@ import (
 
 const (
 	certCacheTTL     = 24 * time.Hour
-	certCacheMaxSize = 1000
+	certCacheMaxSize = 200 // conservative for embedded devices
 )
 
 type cachedCert struct {

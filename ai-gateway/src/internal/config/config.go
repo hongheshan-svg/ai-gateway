@@ -146,59 +146,61 @@ func LoadFromYAML(path string) (*Config, error) {
 func LoadFromUCI() (*Config, error) {
 	cfg := &Config{}
 
+	const uciPkg = "ai-gateway"
+
 	// Global settings
-	cfg.Server.ListenPort = uciGetInt("ai_gateway.global.listen_port", 443)
-	cfg.Server.CADownloadPort = uciGetInt("ai_gateway.global.ca_download_port", 8080)
-	cfg.Server.CADir = uciGet("ai_gateway.global.ca_dir", "/etc/ai-gateway/ca")
-	cfg.Server.CertCacheDir = uciGet("ai_gateway.global.cert_cache_dir", "/tmp/ai-gateway/certs")
-	cfg.Logging.Level = uciGet("ai_gateway.global.log_level", "info")
-	cfg.Logging.Audit = uciGet("ai_gateway.global.audit", "1") == "1"
+	cfg.Server.ListenPort = uciGetInt(uciPkg+".global.listen_port", 443)
+	cfg.Server.CADownloadPort = uciGetInt(uciPkg+".global.ca_download_port", 8080)
+	cfg.Server.CADir = uciGet(uciPkg+".global.ca_dir", "/etc/ai-gateway/ca")
+	cfg.Server.CertCacheDir = uciGet(uciPkg+".global.cert_cache_dir", "/tmp/ai-gateway/certs")
+	cfg.Logging.Level = uciGet(uciPkg+".global.log_level", "info")
+	cfg.Logging.Audit = uciGet(uciPkg+".global.audit", "1") == "1"
 
 	// Identity
-	cfg.Identity.DeviceID = uciGet("ai_gateway.canonical.device_id", "")
-	cfg.Identity.Email = uciGet("ai_gateway.canonical.email", "user@example.com")
+	cfg.Identity.DeviceID = uciGet(uciPkg+".canonical.device_id", "")
+	cfg.Identity.Email = uciGet(uciPkg+".canonical.email", "user@example.com")
 
 	// Env fingerprint
-	cfg.Env.Platform = uciGet("ai_gateway.canonical.platform", "darwin")
-	cfg.Env.PlatformRaw = uciGet("ai_gateway.canonical.platform_raw", "darwin")
-	cfg.Env.Arch = uciGet("ai_gateway.canonical.arch", "arm64")
-	cfg.Env.NodeVersion = uciGet("ai_gateway.canonical.node_version", "v24.3.0")
-	cfg.Env.Terminal = uciGet("ai_gateway.canonical.terminal", "iTerm2.app")
-	cfg.Env.PackageManagers = uciGet("ai_gateway.canonical.package_managers", "npm,pnpm")
-	cfg.Env.Runtimes = uciGet("ai_gateway.canonical.runtimes", "node")
-	cfg.Env.IsClaudeAIAuth = uciGet("ai_gateway.canonical.is_claude_ai_auth", "1") == "1"
-	cfg.Env.Version = uciGet("ai_gateway.canonical.version", "2.1.81")
-	cfg.Env.VersionBase = uciGet("ai_gateway.canonical.version_base", "2.1.81")
-	cfg.Env.BuildTime = uciGet("ai_gateway.canonical.build_time", "2026-03-20T21:26:18Z")
-	cfg.Env.DeploymentEnvironment = uciGet("ai_gateway.canonical.deployment_environment", "unknown-darwin")
-	cfg.Env.VCS = uciGet("ai_gateway.canonical.vcs", "git")
+	cfg.Env.Platform = uciGet(uciPkg+".canonical.platform", "darwin")
+	cfg.Env.PlatformRaw = uciGet(uciPkg+".canonical.platform_raw", "darwin")
+	cfg.Env.Arch = uciGet(uciPkg+".canonical.arch", "arm64")
+	cfg.Env.NodeVersion = uciGet(uciPkg+".canonical.node_version", "v24.3.0")
+	cfg.Env.Terminal = uciGet(uciPkg+".canonical.terminal", "iTerm2.app")
+	cfg.Env.PackageManagers = uciGet(uciPkg+".canonical.package_managers", "npm,pnpm")
+	cfg.Env.Runtimes = uciGet(uciPkg+".canonical.runtimes", "node")
+	cfg.Env.IsClaudeAIAuth = uciGet(uciPkg+".canonical.is_claude_ai_auth", "1") == "1"
+	cfg.Env.Version = uciGet(uciPkg+".canonical.version", "2.1.81")
+	cfg.Env.VersionBase = uciGet(uciPkg+".canonical.version_base", "2.1.81")
+	cfg.Env.BuildTime = uciGet(uciPkg+".canonical.build_time", "2026-03-20T21:26:18Z")
+	cfg.Env.DeploymentEnvironment = uciGet(uciPkg+".canonical.deployment_environment", "unknown-darwin")
+	cfg.Env.VCS = uciGet(uciPkg+".canonical.vcs", "git")
 
 	// Prompt env
-	cfg.PromptEnv.Platform = uciGet("ai_gateway.canonical.prompt_platform", cfg.Env.Platform)
-	cfg.PromptEnv.Shell = uciGet("ai_gateway.canonical.prompt_shell", "zsh")
-	cfg.PromptEnv.OSVersion = uciGet("ai_gateway.canonical.prompt_os_version", "Darwin 24.4.0")
-	cfg.PromptEnv.WorkingDir = uciGet("ai_gateway.canonical.prompt_working_dir", "/Users/jack/projects")
+	cfg.PromptEnv.Platform = uciGet(uciPkg+".canonical.prompt_platform", cfg.Env.Platform)
+	cfg.PromptEnv.Shell = uciGet(uciPkg+".canonical.prompt_shell", "zsh")
+	cfg.PromptEnv.OSVersion = uciGet(uciPkg+".canonical.prompt_os_version", "Darwin 24.4.0")
+	cfg.PromptEnv.WorkingDir = uciGet(uciPkg+".canonical.prompt_working_dir", "/Users/jack/projects")
 
 	// Process metrics
-	cfg.Process.ConstrainedMemory = int64(uciGetInt("ai_gateway.canonical.constrained_memory", 34359738368))
+	cfg.Process.ConstrainedMemory = int64(uciGetInt(uciPkg+".canonical.constrained_memory", 34359738368))
 	cfg.Process.RSSRange = [2]int64{
-		int64(uciGetInt("ai_gateway.canonical.rss_min", 300000000)),
-		int64(uciGetInt("ai_gateway.canonical.rss_max", 500000000)),
+		int64(uciGetInt(uciPkg+".canonical.rss_min", 300000000)),
+		int64(uciGetInt(uciPkg+".canonical.rss_max", 500000000)),
 	}
 	cfg.Process.HeapTotalRange = [2]int64{
-		int64(uciGetInt("ai_gateway.canonical.heap_total_min", 40000000)),
-		int64(uciGetInt("ai_gateway.canonical.heap_total_max", 80000000)),
+		int64(uciGetInt(uciPkg+".canonical.heap_total_min", 40000000)),
+		int64(uciGetInt(uciPkg+".canonical.heap_total_max", 80000000)),
 	}
 	cfg.Process.HeapUsedRange = [2]int64{
-		int64(uciGetInt("ai_gateway.canonical.heap_used_min", 100000000)),
-		int64(uciGetInt("ai_gateway.canonical.heap_used_max", 200000000)),
+		int64(uciGetInt(uciPkg+".canonical.heap_used_min", 100000000)),
+		int64(uciGetInt(uciPkg+".canonical.heap_used_max", 200000000)),
 	}
 
 	// Providers
 	cfg.Upstream = make(map[string]ProviderConfig)
 
 	for _, name := range []string{"anthropic", "openai", "gemini"} {
-		section := "ai_gateway." + name
+		section := uciPkg + "." + name
 		enabled := uciGet(section+".enabled", "0") == "1"
 		if !enabled {
 			continue
@@ -336,11 +338,13 @@ func uciGetInt(key string, defaultVal int) int {
 	return v
 }
 
-// uciGetList calls `uci get <key>` for list options.
+// uciGetList reads a UCI list option by calling `uci show` and parsing all values.
+// `uci get` only returns the first element of a list; `uci show` returns all.
 func uciGetList(key string) []string {
 	ctx, cancel := context.WithTimeout(context.Background(), uciTimeout)
 	defer cancel()
-	out, err := exec.CommandContext(ctx, "uci", "get", key).Output()
+	// Use `uci -q show` which outputs: key='val1' 'val2' ...
+	out, err := exec.CommandContext(ctx, "uci", "-q", "show", key).Output()
 	if err != nil {
 		return nil
 	}
@@ -348,5 +352,19 @@ func uciGetList(key string) []string {
 	if s == "" {
 		return nil
 	}
-	return strings.Fields(s)
+	// Format: ai-gateway.anthropic.domains='api.anthropic.com' 'other.com'
+	idx := strings.Index(s, "=")
+	if idx < 0 {
+		return nil
+	}
+	valPart := s[idx+1:]
+	// Remove surrounding quotes and split
+	var result []string
+	for _, item := range strings.Split(valPart, "'") {
+		item = strings.TrimSpace(item)
+		if item != "" {
+			result = append(result, item)
+		}
+	}
+	return result
 }
