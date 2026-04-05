@@ -1,6 +1,8 @@
 # AI Gateway for OpenWrt
 
-透明 AI API 网关，运行在 OpenWrt 路由器上，自动规范化连接设备的身份/遥测信息。参考 [cc-gateway](https://github.com/motiful/cc-gateway) 项目，用 Go 重写并适配 OpenWrt 生态。
+透明 AI API 网关，运行在 OpenWrt 路由器上，自动规范化连接设备的身份/遥测信息。用 Go 编写，原生适配 OpenWrt 生态。
+
+**GitHub**: https://github.com/hongheshan-svg/ai-gateway
 
 ## 功能
 
@@ -182,6 +184,37 @@ uci commit ai_gateway
 | Anthropic | ✅      | ✅      | ✅        | ✅      | ✅     |
 | OpenAI    | ✅      | ✅      | ✅        | -       | ✅     |
 | Gemini    | ✅      | ✅      | ✅        | -       | ✅     |
+
+## 隐私安全策略
+
+网关在转发请求前执行以下安全清洗：
+
+**全局（所有提供商）**
+- 清除 `X-Forwarded-For`、`X-Real-Ip`、`X-Forwarded-Host` — 防止内网 IP 泄露到上游
+- 清除 `Host`、`Connection`、`Proxy-Authorization` 等 hop-by-hop 头
+
+**Anthropic**
+- 替换 `metadata.user_id` 中的 device_id/email
+- 重写 `<system-reminder>` 块中的环境信息（Platform/Shell/OS/路径）
+- 计算并注入 CCH hash（CC版本指纹）
+- 清除 `x-anthropic-billing-header` 头和系统提示中的 billing 块
+- 重写事件日志批次中的身份/环境/进程指标
+- 清除 `baseUrl`、`gateway` 等泄露字段
+- 归一化 User-Agent
+
+**OpenAI**
+- 将 `user` 字段替换为规范 device_id[:16]
+- 删除 `fingerprint`、`device_id`、`client_info` 字段
+- 重写 system 消息中的环境信息
+- 清除 `x-stainless-*` 遥测头、`x-request-id`
+- 清除 `OpenAI-Organization` 和 `OpenAI-Project` 头
+- 注入网关 API Key，替换原始 Authorization
+
+**Gemini**
+- 删除 `client_info`、`device_id`、`fingerprint`、`metadata` 字段
+- 重写 `system_instruction` 和 `contents` 中的环境信息
+- 清除所有 `x-goog-*` 遥测头（保留归一化的 `x-goog-api-client`）
+- 始终替换 URL 中的 API Key（防止客户端原始 key 泄露）
 
 ## 运行测试
 
